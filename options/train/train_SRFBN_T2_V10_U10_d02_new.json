@@ -1,0 +1,66 @@
+{
+    "mode": "sr",
+    "use_cl": true,
+    "gpu_ids": [0],
+
+    "scale": 2,
+    "is_train": true,
+    "use_chop": false,
+    "rgb_range": 255,
+    "self_ensemble": false,
+    "save_image": false,
+
+    "datasets": {
+        "train": {
+            "mode": "LRHR",
+            "dataroot_HR": "../datasets/train_T2_V10_U10_d02_new_hr",
+            "dataroot_LR": "../datasets/train_T2_V10_U10_d02_new_lr",
+            "dataroot_GDAS": "../datasets/train_T2_V10_U10_d02_new_gdas",
+            "data_type": "npy",
+            "n_workers": 4,
+            "batch_size": 3,
+            "LR_size": 3,
+            "use_flip": false,
+            "use_rot": false,
+            "noise": "."
+        },
+        "val": {
+            "mode": "LRHR",
+            "dataroot_HR": "../datasets/val_T2_V10_U10_d02_new_hr",
+            "dataroot_LR": "../datasets/val_T2_V10_U10_d02_new_lr",
+            "dataroot_GDAS": "../datasets/val_T2_V10_U10_d02_new_gdas",
+            "data_type": "img"
+        }
+    },
+
+    "networks": {
+        "which_model": "SRFBN",
+        "num_features": 64,
+        "in_channels": 3,
+        "out_channels": 3,
+        "num_steps": 4,
+        "num_groups": 6
+    },
+
+    "solver": {
+        "type": "ADAM",
+        "learning_rate": 0.0001,
+        "weight_decay": 0,
+        "lr_scheme": "MultiStepLR",
+        "lr_steps": [20, 40, 60, 80],
+        //"lr_steps": [40, 80, 120, 160],
+        "lr_gamma": 0.5,
+        "loss_type": "l2",
+        "manual_seed": 0,
+        "alpha_gdas": 0.0,
+        "alpha_fft": 0.0,
+        "num_epochs": 100,
+        "skip_threshold": 3,
+        "split_batch": 1,
+        "save_ckp_step": 20,
+        "save_vis_step": 1,
+        "pretrain": "finetune",
+        "pretrained_path": "./models/SRFBN_x2_BI.pth",
+        "cl_weights": [1.0, 1.0, 1.0, 1.0]
+    }
+}

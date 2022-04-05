@@ -8,10 +8,31 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.utils as thutil
 
+from torch.nn import functional as F
+
 from networks import create_model
 from .base_solver import BaseSolver
 from networks import init_weights
 from utils import util
+
+class FFTLoss(nn.Module):
+    def __init__(self, batchsize):
+        super(FFTLoss, self).__init__()
+        self.eps = 1e-7
+
+    def forward(self, x):
+        x = F.pad(x, (0, 64 - x.shape[-1], 0, 64 - x.shape[-2]), 'reflect')
+        vF = torch.fft.fft2(x)
+        #get real part
+        vR = vF[:,:,:,0]
+        #get the imaginary part
+        vI = vF[:,:,:,1]
+        
+        #Get spectrum by computing the elemcent wise complex modulus
+        out = torch.add(torch.pow(vR,2), torch.pow(vI,2))
+        out = torch.sqrt(out + self.eps)
+        return out
+
 
 class SRSolver(BaseSolver):
     def __init__(self, opt):
@@ -46,8 +67,10 @@ class SRSolver(BaseSolver):
             else:
                 raise NotImplementedError('Loss type [%s] is not implemented!'%loss_type)
 
+            self.criterion_fft = nn.L1Loss(size_average=True)
             if self.use_gpu:
                 self.criterion_pix = self.criterion_pix.cuda()
+                self.criterion_fft = self.criterion_fft.cuda()
 
             # set optimizer
             weight_decay = self.train_opt['weight_decay'] if self.train_opt['weight_decay'] else 0
@@ -102,8 +125,20 @@ class SRSolver(BaseSolver):
             if self.use_cl:
                 outputs = self.model(split_LR)
                 loss_steps = [self.criterion_pix(sr, split_HR) for sr in outputs]
+                if self.alpha_fft > 0.00000001:
+                    loss_steps_fft = []
+                    for sr in outputs:
+                        fftLossHR = FFTLoss(sub_batch_size)
+                        fftLossSR = FFTLoss(sub_batch_size)
+                        mHR = fftLossHR(split_HR).detach()
+                        mSR = fftLossSR(sr)
+                        loss_steps_fft.append(self.criterion_fft(mSR, mHR))
+                
+                
                 for step in range(len(loss_steps)):
                     loss_sbatch += self.cl_weights[step] * loss_steps[step]
+                    if self.alpha_fft > 0.00000001:
+                        loss_sbatch += self.alpha_fft * self.cl_weights[step] * loss_steps_fft[step]
             else:
                 output = self.model(split_LR)
                 loss_sbatch = self.criterion_pix(output, split_HR)
@@ -127,7 +162,7 @@ class SRSolver(BaseSolver):
     def test(self):
         self.model.eval()
         with torch.no_grad():
-            forward_func = self._overlap_crop_forward if self.use_chop else self.model.forward
+            forward_func = self.model.forward
             if self.self_ensemble and not self.is_train:
                 SR = self._forward_x8(self.LR, forward_func)
             else:
@@ -292,6 +327,7 @@ class SRSolver(BaseSolver):
             print('===> Loading model from [%s]...' % model_path)
             if self.is_train:
                 checkpoint = torch.load(model_path)
+
                 self.model.load_state_dict(checkpoint['state_dict'])
 
                 if self.opt['solver']['pretrain'] == 'resume':

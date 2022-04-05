@@ -119,11 +119,6 @@ class SRFBN(nn.Module):
         self.num_features = num_features
         self.upscale_factor = upscale_factor
 
-        # RGB mean for DIV2K
-        rgb_mean = (0.4488, 0.4371, 0.4040)
-        rgb_std = (1.0, 1.0, 1.0)
-        self.sub_mean = MeanShift(rgb_mean, rgb_std)
-
         # LR feature extraction block
         self.conv_in = ConvBlock(in_channels, 4*num_features,
                                  kernel_size=3,
@@ -146,12 +141,15 @@ class SRFBN(nn.Module):
                                   kernel_size=3,
                                   act_type=None, norm_type=norm_type)
 
-        self.add_mean = MeanShift(rgb_mean, rgb_std, 1)
+        self.feat_in.requires_grad = False
+        self.block.requires_grad = False
+        self.out.requires_grad = False
+
+        # self.add_mean = MeanShift(rgb_mean, rgb_std, 1)
 
     def forward(self, x):
         self._reset_state()
 
-        x = self.sub_mean(x)
 		# uncomment for pytorch 0.4.0
         # inter_res = self.upsample(x)
 		
@@ -166,7 +164,6 @@ class SRFBN(nn.Module):
             h = self.block(x)
 
             h = torch.add(inter_res, self.conv_out(self.out(h)))
-            h = self.add_mean(h)
             outs.append(h)
 
         return outs # return output of every timesteps
