@@ -8,12 +8,14 @@ from utils import util
 from solvers import create_solver
 from data import create_dataloader
 from data import create_dataset
+import wandb
 
 
 def main():
     parser = argparse.ArgumentParser(description='Train Super Resolution Models')
     parser.add_argument('-opt', type=str, required=True, help='Path to options JSON file.')
     opt = option.parse(parser.parse_args().opt)
+    wandb.init(project="srfbn", config=opt)
 
     # random seed
     seed = opt['solver']['manual_seed']
@@ -74,6 +76,9 @@ def main():
 
         solver_log['records']['train_loss'].append(sum(train_loss_list)/len(train_set))
         solver_log['records']['lr'].append(solver.get_current_learning_rate())
+        wandb.log({'train_loss': sum(train_loss_list)/len(train_set)})
+        wandb.log({'lr': solver.get_current_learning_rate()})
+        wandb.log({'epoch': epoch})
 
         print('\nEpoch: [%d/%d]   Avg Train Loss: %.6f' % (epoch,
                                                     NUM_EPOCH,
@@ -102,6 +107,9 @@ def main():
         solver_log['records']['val_loss'].append(sum(val_loss_list)/len(val_loss_list))
         solver_log['records']['psnr'].append(sum(psnr_list)/len(psnr_list))
         solver_log['records']['ssim'].append(sum(ssim_list)/len(ssim_list))
+        wandb.log({'val_loss': sum(val_loss_list)/len(val_loss_list)})
+        wandb.log({'psnr': sum(psnr_list)/len(psnr_list)})
+        wandb.log({'ssim': sum(ssim_list)/len(ssim_list)})
 
         # record the best epoch
         epoch_is_best = False

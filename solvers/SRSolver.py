@@ -14,6 +14,8 @@ from networks import create_model
 from .base_solver import BaseSolver
 from networks import init_weights
 from utils import util
+import wandb
+
 
 class FFTLoss(nn.Module):
     def __init__(self, batchsize):
@@ -21,15 +23,15 @@ class FFTLoss(nn.Module):
         self.eps = 1e-7
 
     def forward(self, x):
-        x = F.pad(x, (0, 64 - x.shape[-1], 0, 64 - x.shape[-2]), 'reflect')
-        vF = torch.fft.fft2(x)
+        # x = F.pad(x, (0, 64 - x.shape[-1], 0, 64 - x.shape[-2]), 'reflect')
+        vF = torch.fft.fft2(x[:, 1:, :, :]) # don't use FFT for T2
         #get real part
         vR = vF[:,:,:,0]
         #get the imaginary part
         vI = vF[:,:,:,1]
         
         #Get spectrum by computing the elemcent wise complex modulus
-        out = torch.add(torch.pow(vR,2), torch.pow(vI,2))
+        out = torch.add(torch.pow(vR, 2), torch.pow(vI, 2))
         out = torch.sqrt(out + self.eps)
         return out
 
@@ -57,6 +59,8 @@ class SRSolver(BaseSolver):
             if self.use_cl:
                 self.cl_weights = self.opt['solver']['cl_weights']
                 assert self.cl_weights, "[Error] 'cl_weights' is not be declared when 'use_cl' is true"
+
+            self.alpha_fft = self.train_opt['alpha_fft']
 
             # set loss
             loss_type = self.train_opt['loss_type']
@@ -120,8 +124,8 @@ class SRSolver(BaseSolver):
         sub_batch_size = int(self.LR.size(0) / self.split_batch)
         for i in range(self.split_batch):
             loss_sbatch = 0.0
-            split_LR = self.LR.narrow(0, i*sub_batch_size, sub_batch_size)
-            split_HR = self.HR.narrow(0, i*sub_batch_size, sub_batch_size)
+            split_LR = self.LR.narrow(0, i * sub_batch_size, sub_batch_size)
+            split_HR = self.HR.narrow(0, i * sub_batch_size, sub_batch_size)
             if self.use_cl:
                 outputs = self.model(split_LR)
                 loss_steps = [self.criterion_pix(sr, split_HR) for sr in outputs]
@@ -308,12 +312,14 @@ class SRSolver(BaseSolver):
         if is_best:
             print('===> Saving best checkpoint to [%s] ...]' % filename.replace('last_ckp','best_ckp'))
             torch.save(ckp, filename.replace('last_ckp','best_ckp'))
+            wandb.save(filename.replace('last_ckp','best_ckp'))
 
         if epoch % self.train_opt['save_ckp_step'] == 0:
             print('===> Saving checkpoint [%d] to [%s] ...]' % (epoch,
                                                                 filename.replace('last_ckp','epoch_%d_ckp'%epoch)))
 
             torch.save(ckp, filename.replace('last_ckp','epoch_%d_ckp'%epoch))
+            wandb.save(filename.replace('last_ckp','epoch_%d_ckp'%epoch))
 
 
     def load(self):

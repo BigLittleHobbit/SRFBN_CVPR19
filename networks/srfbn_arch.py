@@ -119,6 +119,10 @@ class SRFBN(nn.Module):
         self.num_features = num_features
         self.upscale_factor = upscale_factor
 
+        rgb_mean = (0.4488, 0.4371, 0.4040)
+        rgb_std = (1.0, 1.0, 1.0)
+        self.sub_mean = MeanShift(rgb_mean, rgb_std)
+
         # LR feature extraction block
         self.conv_in = ConvBlock(in_channels, 4*num_features,
                                  kernel_size=3,
@@ -145,7 +149,7 @@ class SRFBN(nn.Module):
         self.block.requires_grad = False
         self.out.requires_grad = False
 
-        # self.add_mean = MeanShift(rgb_mean, rgb_std, 1)
+        self.add_mean = MeanShift(rgb_mean, rgb_std, 1)
 
     def forward(self, x):
         self._reset_state()
